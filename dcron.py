@@ -1,5 +1,4 @@
-# Please edit file 'FILE_NAME' to set restart-time and action.
-
+#!/usr/bin/env python
 import memcache
 import hashlib
 import datetime
