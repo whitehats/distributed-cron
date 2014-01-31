@@ -37,22 +37,24 @@ def main():
 
             if mcdata == None:
                 mc.set(hashed, nowdate)
-                print "Memcache entry does'nt exist, putting new to memory."
+                print "Memcache entry doesn't exist for %s, putting new to memory." % (action)
                 run(action)
             elif mcdata + datetime.timedelta(minutes=mins) <= nowdate:
                 mc.set(hashed, nowdate)
-                print "Time left for %s, starting again."%mcdata
+                print "Run %s (last run  %s)" % (action, mcdata)
                 run(action)
             elif abs(datetime_to_seconds(nowdate) - datetime_to_seconds(mcdata)) > \
                 2*datetime.timedelta.total_seconds(datetime.timedelta(minutes=mins)):
                 mc.set(hashed, nowdate)
-                print "Wrong time-range for %s, starting again."%mcdata
+                print "Wrong time-range for %s %s, starting again." % (mcdata, action)
                 run(action)
 
-    for elem in process_list:
+    for process in process_list:
         try:
-            elem.wait()
+            print process.stdout
+            print process.stderr
+            process.wait()
         except sh.SignalException_9 :
-            print "Error:  ", elem, "  action timeout!"
+            print "Error:  ", process, "  action timeout!"
 
 main()
