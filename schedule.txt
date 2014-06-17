@@ -1,4 +1,6 @@
-10 ls -l
-200 cat
-0.1 ls
-0.2 ls -l
+# Every minute
+* * * * * : ls -l
+# Every ten minutes
+*/10 * * * * : ls
+# At 18:00
+0 18 * * * : ls -l /usr/local/bin

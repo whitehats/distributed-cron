@@ -1,60 +1,72 @@
 #!/usr/bin/env python
-import memcache
+# -*- coding: utf-8 -*-
 import hashlib
-import datetime
-import calendar
+import logging
+from datetime import datetime
+import memcache
 import sh
+from croniter import croniter
 
-# Timeout for action in seconds.
-TIMEOUT = 21600 
+# Timeout for action in seconds
+TIMEOUT = 21600
 # Address for memcache
 ADDRESS = '127.0.0.1:11211'
 # File with data
 FILE_NAME = "schedule.txt"
 
 
-def datetime_to_seconds(_datetime):
-    timestamp = int(calendar.timegm(_datetime.utctimetuple()))
-    return timestamp
-
-
 def main():
-    process_list=[]    
+    logging.basicConfig(level=logging.DEBUG)
+
+    processes = []
     mc = memcache.Client([ADDRESS], debug=0)
 
     def run(action):
-        x = sh.bash(c=action, _bg=True, _timeout=TIMEOUT)
-        process_list.append(x)
+        processes.append(sh.bash(c=action, _bg=True, _timeout=TIMEOUT))
 
+    with open(FILE_NAME, 'r') as f:
+        for line in f:
+            if line[0] == '#':
+                continue
 
-    with open(FILE_NAME, 'r') as fdane:
-        for line in fdane:
             hashed = hashlib.sha224(line).hexdigest()
-            mins, action = line.split(None, 1)
-            mins = float(mins)
-            nowdate = datetime.datetime.utcnow()
-            mcdata = mc.get(hashed)
+            cron_spec, action = line.split(":", 1)
+            action = action[:-1]
+            cached_date = mc.get(hashed)
+            now = datetime.utcnow()
 
-            if mcdata == None:
-                mc.set(hashed, nowdate)
-                print "Memcache entry doesn't exist for %s, putting new to memory." % (action)
+            if cached_date is None:
+                logging.info(
+                    "No memcache entry for `{}`, new one. will be created"
+                    .format(action)
+                )
+                cached_date = now
+                mc.set(hashed, now)
                 run(action)
-            elif mcdata + datetime.timedelta(minutes=mins) <= nowdate:
-                mc.set(hashed, nowdate)
-                print "Run %s (last run  %s)" % (action, mcdata)
-                run(action)
-            elif abs(datetime_to_seconds(nowdate) - datetime_to_seconds(mcdata)) > \
-                2*datetime.timedelta.total_seconds(datetime.timedelta(minutes=mins)):
-                mc.set(hashed, nowdate)
-                print "Wrong time-range for %s %s, starting again." % (mcdata, action)
+                continue
+
+            cron_entry = croniter(cron_spec, cached_date)
+            new_date = cron_entry.get_next(datetime)
+
+            logging.debug(
+                "Attempting to run `{}` at `{}` "
+                "(previous run at `{}`, expected next run at `{}`)"
+                .format(action, now, cached_date, new_date)
+            )
+            if new_date <= now:
+                logging.info(
+                    "Running `{}` at `{}` (previous run at `{}`)"
+                    .format(action, now, cached_date)
+                )
+                mc.set(hashed, now)
                 run(action)
 
-    for process in process_list:
+    for process in processes:
         try:
-            print process.stdout
-            print process.stderr
-            process.wait()
-        except sh.SignalException_9 :
-            print "Error:  ", process, "  action timeout!"
+            logging.info("{}:STDOUT:\n{}".format(process.pid, process.stdout))
+            logging.info("{}:STDERR:\n{}".format(process.pid, process.stderr))
+        except sh.SignalException_9:
+            logging.warning("`{}` timed out.".format(process))
+
 
 main()
