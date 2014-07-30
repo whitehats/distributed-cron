@@ -48,11 +48,6 @@ def main():
             cron_entry = croniter(cron_spec, cached_date)
             new_date = cron_entry.get_next(datetime)
 
-            logging.debug(
-                "Attempting to run `{}` at `{}` "
-                "(previous run at `{}`, expected next run at `{}`)"
-                .format(action, now, cached_date, new_date)
-            )
             if new_date <= now:
                 logging.info(
                     "Running `{}` at `{}` (previous run at `{}`)"
@@ -60,6 +55,12 @@ def main():
                 )
                 mc.set(hashed, now)
                 run(action)
+            else:
+                logging.debug(
+                    "Not running `{}` at `{}` (last run at `{}`,"
+                    " expected next run at `{}`, based on `{}`"
+                    .format(action, now, cached_date, new_date, cron_spec)
+                )
 
     for process in processes:
         try:
